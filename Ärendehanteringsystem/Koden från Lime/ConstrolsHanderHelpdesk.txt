@@ -1,0 +1,345 @@
+Option Explicit
+    
+    Private WithEvents m_Controls As Lime.Controls
+    Private WithEvents m_Inspector As Lime.Inspector
+
+    Private m_NewHelpdesk As Boolean 'För att kunna logga historik när ett ärende är inkommet
+
+Private Sub Class_Initialize()
+    On Error GoTo ErrorHandler
+    Set m_Controls = Application.ActiveControls
+    
+
+    
+    If Not m_Controls Is Nothing Then
+    
+        If m_Controls.Parent Is m_Controls.ParentInspector Then
+        Set m_Inspector = m_Controls.ParentInspector
+        End If
+        
+        Call Setup
+        If (m_Controls.Record.State And lkRecordStateNew) = lkRecordStateNew Then
+            m_NewHelpdesk = True
+                
+            'sätt deadline
+            ' 2013-08-01: Changed to a default value on field deadlinedate to also work with helpdesk records created from the Extranet.
+            'Call m_Controls.SetValue("deadlinedate", ActionPad_Helpdesk.AddWorkingHours(VBA.Now(), CustomSettings.HELPDESK_DEADLINE_HOURS))
+            
+        Else
+            m_NewHelpdesk = False
+        End If
+    End If
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.Class_Initialize")
+End Sub
+
+Private Sub m_Controls_AfterActiveControlChanged()
+On Error GoTo ErrorHandler
+    
+     
+    Call Setup
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_controls_AfterActiveControlChanged")
+
+End Sub
+
+Private Sub m_Controls_AfterCommand(ByVal Control As IControl, ByVal Command As ControlCommandEnum, ByVal Params As LDE.IProperties)
+ On Error GoTo ErrorHandler
+  If Command = lkControlCommandValueChanged Then
+        Select Case Control.Field.Name
+            Case "helpdeskstatus"
+                   If Control.Value <> Control.OriginalValue Then
+                        Select Case Control.OptionKey
+                        'Select Case oOption.Key
+                            Case "started":
+                                'Om ev. befintligt värde inte ska skrivas över kommentera fram if-satsen.
+                                'If m_Controls.GetText("quotesent") = "" Then
+                                    Call m_Controls.SetValue("startdate", VBA.Now())
+                                'End If
+                                          
+                                  
+                            Case "finished"
+                                'Om ev. befintligt värde inte ska skrivas över kommentera fram if-satsen.
+                                'If m_controls.GetText("closeddate") = "" Then
+                                    Call m_Controls.SetValue("enddate", VBA.Now())
+                                    Call m_Controls.SetEnabled("orderno", True)
+                                  
+                                'End If
+                            
+                            Case "confirm"
+                                'Om ev. befintligt värde inte ska skrivas över kommentera fram if-satsen.
+                                'If m_controls.GetText("closeddate") = "" Then
+                                    Call m_Controls.SetValue("verificationdate", VBA.Now())
+                                'End If
+                           End Select
+         
+                   
+                                                
+                    End If
+            End Select
+  End If
+  Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_controls_AfterCommand")
+End Sub
+
+Private Sub m_controls_AfterRecordChanged()
+    On Error GoTo ErrorHandler
+    Call Setup
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_controls_AfterRecordChanged")
+End Sub
+
+Private Sub m_Controls_Refresh()
+    On Error GoTo ErrorHandler
+    Call Setup
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_Controls_Refresh")
+End Sub
+
+Private Sub Setup()
+    On Error GoTo ErrorHandler
+    If Not m_Controls Is Nothing Then
+    
+       
+            If Not m_Inspector Is Nothing Then 'This is in case of listediting, otherwise the vba will break
+            
+                'If utility is EL = 1401 show explorer AOEl if utility is FV=1201 show explorer AOheating else hide them both
+                
+                    If m_Controls.GetValue("utility") = 1401 Then 'Utility EL
+                                                    
+                        m_Inspector.Explorers("aoheating").Visible = False
+                        
+                    Else
+                    
+                        m_Inspector.Explorers("aoheating").Visible = True
+                   End If
+                        
+                    If m_Controls.GetValue("utility") = 1201 Then 'Utility Fjärrvärme
+                                                    
+                        m_Inspector.Explorers("aoelectricity").Visible = False
+                        
+                    Else
+                    
+                        m_Inspector.Explorers("aoelectricity").Visible = True
+                    End If
+                    
+                    If m_Controls.GetValue("utility") = 1101 Then ' Utility Fjärrkyla
+                        m_Inspector.Explorers("aoelectricity").Visible = False
+                        m_Inspector.Explorers("aoheating").Visible = False
+                    
+                    ElseIf m_Controls.GetValue("utility") = 1301 Then ' Utility Gas
+                                                   
+                        m_Inspector.Explorers("aoelectricity").Visible = False
+                        m_Inspector.Explorers("aoheating").Visible = False
+                    
+                    End If
+            
+        End If
+        
+        
+    End If
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.Setup")
+End Sub
+
+
+Private Sub m_Controls_AfterSave()
+    On Error GoTo ErrorHandler
+    If Not m_Controls Is Nothing Then
+    ' When new, create history
+        If m_NewHelpdesk And ((m_Controls.State And lkControlsStateDeleted) <> lkControlsStateDeleted) Then
+            Dim oRecord As New LDE.Record
+            Call oRecord.Open(Database.Classes("history"))
+            oRecord.Value("coworker") = ActiveUser.Record.ID
+            oRecord.Value("helpdesk") = m_Controls.Record.ID
+            Call oRecord.SelectOption("type", "comment")
+            oRecord.Value("note") = Localize.GetText("ActionPad_Helpdesk", "t_errand_incoming")
+            oRecord.Value("company") = m_Controls.GetValue("company")
+            oRecord.Update
+            
+            
+            
+            m_NewHelpdesk = False
+        End If
+    End If
+    
+    
+    Dim pRecord As New LDE.Record
+    If m_Controls.GetValue("installerperson") <> m_Controls.GetOriginalValue("installerperson") Then
+        Call pRecord.Open(Classes("helpdesk"), m_Controls.Record.ID, "installerpersondate")
+        pRecord.Value("installerpersondate") = VBA.Now
+        pRecord.Update
+    End If
+
+    If Not IsNull(m_Controls.GetValue("installerperson")) And IsNull(m_Controls.GetOriginalValue("installerperson")) Then
+        Call pRecord.Open(Classes("helpdesk"), m_Controls.Record.ID, "installerpersondate")
+        pRecord.Value("installerpersondate") = VBA.Now
+        pRecord.Update
+    End If
+    
+
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_Controls_AfterSave")
+End Sub
+
+Private Sub m_Controls_BeforeSave(Cancel As Boolean)
+    On Error GoTo ErrorHandler
+    
+    If Not m_Controls Is Nothing Then
+        
+        Dim pControls As Lime.Controls
+        Dim oNewMail As Object
+        Dim strRecipient As String
+        Dim strSubject As String
+        Dim strBody As String
+        Dim strSosNumber As String
+        Dim oMailer As Lime.IMailer
+        Dim m_Inspector As New Lime.Inspector
+        Dim oRecord As New Record
+        Dim oInspector As New Inspector
+        Dim oNewInspector As Lime.Inspector
+        Dim OHistoryRecord As New Record
+        
+        If m_Controls.GetValue("orderno") = "" And m_Controls.GetValue("helpdeskstatus") = 197401 Then
+           ' Call Lime.MessageBox("Du måste ange ordernummer för att kunna avsluta ärendet")
+            Call m_Controls.SetRequired("orderno", True)
+        End If
+        If m_Controls.GetOriginalValue("coworker", 0) = 0 And m_Controls.GetValue("coworker") <> "" Then
+            Call m_Controls.SetValue("helpdeskstatus", 197101)
+        End If
+
+        If ((m_Controls.GetValue("coworker") <> m_Controls.GetOriginalValue("coworker")) And (ActiveUser.Record.ID <> m_Controls.GetValue("coworker"))) Then
+            
+          If Lime.MessageBox(Localize.GetText("ControlsHandlerHelpdesk", "q_contact_coworker"), vbYesNo) = vbYes Then
+          
+            
+            
+            Set pControls = Application.ActiveControls
+            If Not Application.ActiveInspector Is Nothing Then
+                Set m_Inspector = Application.ActiveInspector
+             Else
+                Exit Sub
+            End If
+            Dim oAddin As Object
+            For Each oAddin In Application.AddIns
+            If oAddin.ProgId = "LimeOutlookXP.Addin" Then
+                Set oMailer = oAddin.Object
+            End If
+            Next oAddin
+    
+            If oMailer Is Nothing Then
+                Call Lime.MessageBox("LIME Pro kan inte kommunicera med Outlook. Kontrollera att kopplingen fungerar")
+                Exit Sub
+            End If
+    
+   
+
+
+            If IsNull(pControls.GetValue("coworker", Null)) = True Then
+                Call Lime.MessageBox(Localize.GetText("ControlsHandlerHelpdesk", "i_nocoworker"), vbInformation)
+                Exit Sub
+            End If
+    
+             If pControls.Record.Modified = True Then
+                 Call pControls.Save
+             End If
+            
+            strRecipient = pControls.Record.Record("coworker").Text("email")
+            strSubject = Localize.GetText("ControlsHandlerHelpdesk", "new_helpdesk")
+            strBody = "<p style='font-family:calibri'>Nytt ärende:<br><br>"
+            strBody = strBody & "<b>" & pControls.GetText("helpdeskno", "") & " " & pControls.GetText("title", "") & "</b><br><br>"
+        
+            strBody = strBody & "<A HREF='"
+            strBody = strBody & ThisApplication.CreateURL(ActiveInspector.Record)
+            strBody = strBody & "'>" & pControls.GetText("helpdeskno", "") & " " & pControls.GetText("title", "") & "</a><br>"
+
+
+            Set oNewMail = CreateObject("LimeOutlookXP.NewMail")
+            oNewMail.Recipients = strRecipient
+            oNewMail.Subject = strSubject
+            oNewMail.htmlbody = strBody
+            oNewMail.Display
+    
+      
+
+            End If
+        End If
+    End If
+   
+     If (m_Controls.GetValue("helpdeskstatus") = "197401" And m_Controls.GetValue("helpdeskstatus") <> m_Controls.GetOriginalValue("helpdeskstatus")) Or (m_Controls.GetValue("helpdeskstatus") = "197601" And m_Controls.GetValue("helpdeskstatus") <> m_Controls.GetOriginalValue("helpdeskstatus")) Then
+        If Lime.MessageBox(Localize.GetText("ControlsHandlerHelpdesk", "q_updatecustomer"), vbYesNo) = vbYes Then
+            Call ActionPad_Helpdesk.sendMailToCustomer
+            Call promptHistory("comment")
+            
+        End If
+    End If
+    
+
+  
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_Controls_BeforeSave")
+
+End Sub
+
+Private Sub m_controls_BeforeCommand(ByVal Control As IControl, ByVal Command As ControlCommandEnum, ByVal Params As LDE.IProperties, Cancel As Boolean)
+  On Error GoTo ErrorHandler
+    Select Case Control.Field.Name
+        Case "mainhelpdesktype"
+            If Command = lkControlCommandContextMenu Then
+                Call Params.Put("style", lkLinkControlStyleDropDown)
+            End If
+        End Select
+Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerHelpdesk.m_Controls_BeforeCommand")
+
+End Sub
+Public Sub promptHistory(ByVal sHistoryType As String, Optional ByVal sNote As String)
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    
+    
+        If Globals.VerifyInspector("helpdesk", oInspector) Then
+            If (oInspector.Record.State And lkRecordStateNew) = lkRecordStateNew Then
+            On Error GoTo ErrorSaving
+                'Call oInspector.Controls.Validate
+                oInspector.Save (True)
+            GoTo SaveOK
+ErrorSaving:
+                Call Lime.MessageBox(Err.Description)
+                Exit Sub
+SaveOK:
+        End If
+    End If
+    
+    Dim oRecord As New LDE.Record
+    Dim oNewInspector As Lime.Inspector
+   
+    oRecord.Open Database.Classes("history")
+    Call oRecord.SelectOption("type", sHistoryType)
+    'If VBA.IsMissing(sNote) = False Then
+   '     oRecord.Value("note") = sNote
+  '  End If
+    oRecord.Value("helpdesk") = oInspector.Record.ID
+    oRecord.Value("company") = oInspector.Controls.GetValue("company")
+    oRecord.Value("person") = oInspector.Controls.GetValue("person")
+    oRecord.Value("eanno") = oInspector.Controls.GetValue("eanno")
+    Set oNewInspector = Lime.OpenInspector(oInspector, oRecord, lkActivateExisting)
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.PromptHistory")
+End Sub
+

@@ -1,0 +1,55 @@
+Option Explicit
+
+    Private m_GeneralApplicationHandler As GeneralApplicationHandler
+    Private m_GeneralControlsHandler As GeneralControlsHandler
+    Private m_GeneralExplorerHandler As GeneralExplorerHandler
+    Private m_GeneralInspectorHandler As GeneralInspectorHandler
+    
+Private Sub Application_AfterActiveExplorerChanged()
+    On Error GoTo ErrorHandler
+
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ThisApplication.Application_AfterActiveExplorerChanged")
+End Sub
+
+Private Sub Application_Initialize()
+    On Error GoTo ErrorHandler
+    
+    'Check if the Lime client is of the required version
+    If Globals.CheckLimeVersion(10, 8, 186, True) Then
+        'Call Application.Quit
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ThisApplication.Application_Initialize")
+End Sub
+
+Private Sub Application_StartUp(Cancel As Boolean)
+    On Error GoTo ErrorHandler
+    
+    Call Setup
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ThisApplication.Application_StartUp")
+End Sub
+
+Public Sub Setup()
+    On Error GoTo ErrorHandler
+    
+    Application.WebBar.Visible = True
+    Application.Overview.Visible = False
+    
+    Set m_GeneralApplicationHandler = New GeneralApplicationHandler
+    Set m_GeneralControlsHandler = New GeneralControlsHandler
+    Set m_GeneralExplorerHandler = New GeneralExplorerHandler
+    Set m_GeneralInspectorHandler = New GeneralInspectorHandler
+    
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ThisApplication.Setup")
+End Sub
+
+

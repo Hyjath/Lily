@@ -1,0 +1,27 @@
+'OBSERVERA ATT KODEN I DENNA KLASS ÄR EN DEL AV GRUNDDATABASEN OCH FÅR INTE ÄNDRAS.
+'ÄNDRINGAR OCH TILLÄGG I FUNKTIONALITET GÖRS I SEPARATA KLASSER OCH MODULER.
+'OM DU TROTS DETTA VÄLJER ATT GÖRA ÄNDRINGAR I KODEN NEDAN GARANTERAS INTE LÄNGRE
+'VERSIONS KOMPABILITET ELLER SUPPORT. //Projektgruppen LEAN
+Option Explicit
+
+
+Public Sub setProbability(ByVal nProbablity As Integer)
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("business", oInspector, False) Then
+        If nProbablity >= 0 And nProbablity <= 100 Then
+            Call oInspector.Controls.SetValue("probability", nProbablity / 100)
+        End If
+    
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Business.SetProbability")
+End Sub
+
+
+

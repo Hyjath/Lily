@@ -1,0 +1,44 @@
+Option Explicit
+Private WithEvents m_Controls As Lime.Controls
+
+Private Sub Class_Initialize()
+    On Error GoTo ErrorHandler
+    Set m_Controls = Application.ActiveControls
+    
+    If Not m_Controls Is Nothing Then
+            If Not m_Controls.Record Is Nothing Then
+            
+                'Check so it's a new card
+                If (m_Controls.State And lkControlsStateNew) = lkControlsStateNew Then
+                    If Not ThisApplication.ActiveInspector Is Nothing Then
+                    
+                        'Check so the new card is created from Parent
+                        If (Not ActiveInspector.ParentInspector Is Nothing) Then
+
+                            'Check so the Parent is helpdesk
+                            If (ActiveInspector.ParentInspector.Class.Name = "helpdesk") Then
+
+                                'Collects information from the parent and sets value on active control
+                                Call m_Controls.SetValue("aonumber", ActiveInspector.ParentInspector.Record("workorderno"))
+                                Call m_Controls.SetValue("ean", ActiveInspector.ParentInspector.Record.Text("eanno"))
+                                Call m_Controls.SetValue("plantaddress", ActiveInspector.ParentInspector.Record("address"))
+                                Call m_Controls.SetValue("measureno", ActiveInspector.ParentInspector.Record("measureno"))
+                               
+                            End If
+
+                        End If
+
+                    End If
+
+                End If
+    
+            End If
+
+        End If
+    
+              
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerAOAOElectricity.Class_Initialize")
+End Sub
+

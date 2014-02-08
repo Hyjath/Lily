@@ -1,0 +1,183 @@
+Option Explicit
+
+Public Sub SetDone(Optional createNew As Boolean = False, Optional createHistory As Boolean = False)
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+    Dim oRecord As LDE.Record
+    Dim oRecordHistory As LDE.Record
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("todo", oInspector, False) Then
+        On Error GoTo ErrorSave
+            Call oInspector.Save(True)
+            GoTo SaveOK
+ErrorSave:
+        Lime.MessageBox (Err.Description)
+        Exit Sub
+SaveOK:
+    
+        If oInspector.Controls.GetOriginalValue("done", 0) = 1 Then
+            Call Application.MessageBox(Localize.GetText("Actionpad_Todo", "e_already_done"))
+            Exit Sub
+        End If
+        
+        Call oInspector.Controls.SetValue("done", 1)
+        
+        'Om sluttid finns sedan tidigare ska både start och sluttid sättas till Now()
+        'Prickar man av aktivitet utan sluttid så ska ingen sluttid sättas.
+        
+        If oInspector.Controls.GetValue("starttime") > VBA.Now() Then 'prickar av i förtid, om sluttid finns, sätt om både start och sluttid
+            If oInspector.Controls.GetText("endtime") <> "" Then
+                Call oInspector.Controls.SetValue("starttime", VBA.Now())
+                Call oInspector.Controls.SetValue("endtime", VBA.Now())
+            End If
+        End If
+        
+        
+        If createNew Then
+            Set oRecord = New LDE.Record
+            
+            oRecord.Open Database.Classes("todo")
+            
+            oRecord.Value("company") = oInspector.Controls.GetValue("company")
+            oRecord.Value("person") = oInspector.Controls.GetValue("person")
+            oRecord.Value("business") = oInspector.Controls.GetValue("business")
+            If oRecord.Fields.Exists("helpdesk") Then
+                oRecord.Value("helpdesk") = oInspector.Controls.GetValue("helpdesk")
+            End If
+            oRecord.Value("campaign") = oInspector.Controls.GetValue("campaign")
+            oRecord.Value("coworker") = ActiveUser.Record.ID
+            oRecord.Value("done") = 0
+        End If
+        
+        If createHistory Then
+            
+            Set oRecordHistory = New LDE.Record
+            
+            oRecordHistory.Open Database.Classes("history")
+            
+            oRecordHistory.Value("company") = oInspector.Controls.GetValue("company")
+            oRecordHistory.Value("person") = oInspector.Controls.GetValue("person")
+            oRecordHistory.Value("business") = oInspector.Controls.GetValue("business")
+            If oRecordHistory.Fields.Exists("helpdesk") Then
+                oRecordHistory.Value("helpdesk") = oInspector.Controls.GetValue("helpdesk")
+            End If
+            oRecordHistory.Value("campaign") = oInspector.Controls.GetValue("campaign")
+            oRecordHistory.Value("coworker") = ActiveUser.Record.ID
+        End If
+        
+        Call oInspector.Close(True)
+        
+        'Has to be done after the first inspector is close for the Actionpad to do the right thing
+        If createNew Or createHistory Then
+            If Not oRecord Is Nothing Then
+                Call Application.OpenInspector(Nothing, oRecord, lkActivateExisting)
+            End If
+            
+            If Not oRecordHistory Is Nothing Then
+                Call Application.OpenInspector(Nothing, oRecordHistory, lkActivateExisting)
+            End If
+        End If
+        
+        
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Todo.SetDone")
+End Sub
+
+Public Sub Postpone(ByVal sUnit As String, ByVal iAmount As Integer)
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+        
+    Set oInspector = Application.ActiveInspector
+        
+    If Globals.VerifyInspector("todo", oInspector) Then
+        If oInspector.Controls.GetOriginalText("starttime", "") <> "" Then
+            Call oInspector.Controls.SetValue("starttime", VBA.DateAdd(sUnit, iAmount, oInspector.Controls.GetOriginalValue("starttime")))
+        Else
+            Call oInspector.Controls.SetValue("starttime", VBA.DateAdd(sUnit, iAmount, VBA.Date()))
+        End If
+        If oInspector.Controls.GetOriginalText("endtime", "") <> "" Then
+            Call oInspector.Controls.SetValue("endtime", VBA.DateAdd(sUnit, iAmount, oInspector.Controls.GetOriginalValue("endtime")))
+        Else
+            Call oInspector.Controls.SetValue("endtime", "")
+        End If
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Todo.Postpone")
+End Sub
+
+Public Function GetContactOptions() As String
+    On Error GoTo ErrorHandler
+    Dim oRecordPerson As New LDE.Record
+    Dim oRecordCompany As LDE.Record
+    Dim oView As New LDE.view
+    Dim oInspector As Lime.Inspector
+    Dim strHTML As String
+    Dim idcompany As Long
+    
+    strHTML = ""
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("todo", oInspector) Then
+        strHTML = "<ul>"
+    
+        'Om en person är kopplad
+        If oInspector.Controls.GetValue("person", 0) > 0 Then
+            Call oView.Add("phone")
+            Call oView.Add("mobilephone")
+            Call oView.Add("email")
+            Call oView.Add("company.idcompany")
+            Call oView.Add("company.phone")
+            
+            oRecordPerson.Open Database.Classes("person"), oInspector.Controls.GetValue("person"), oView
+            
+            
+            If VBA.Len(oRecordPerson.Value("phone")) > 0 Then
+                strHTML = strHTML + "<li><a> " + oRecordPerson.Value("phone") + " (" + oRecordPerson.Field("phone").LocalName + ")</a><br/></li>"
+            End If
+            
+            If VBA.Len(oRecordPerson.Value("mobilephone")) > 0 Then
+                strHTML = strHTML + "<li><a>" + oRecordPerson.Value("mobilephone") + " (" + oRecordPerson.Field("mobilephone").LocalName + ")</a><br/></li>"
+            End If
+            
+            If VBA.Len(oRecordPerson.Value("email")) > 0 Then
+                strHTML = strHTML + "<li><a href=""mailto:" + oRecordPerson.Value("email") + """>" + oRecordPerson.Value("email") + "</a><br/></li>"
+            End If
+            
+            'Vad är det för företagsid
+            If VBA.IsNull(oRecordPerson.Value("company.idcompany")) = False Then
+                idcompany = oRecordPerson.Value("company.idcompany")
+            End If
+        End If
+        
+        'Företag samma som personens företag och företag satt
+        If oInspector.Controls.GetValue("company", 0) = idcompany And oInspector.Controls.GetValue("company", 0) > 0 Then
+            If VBA.Len(oRecordPerson.Value("company.phone")) > 0 Then
+                strHTML = strHTML + "<li><a>" + oRecordPerson.Value("company.phone") + " (" + Database.Classes("company").LocalName + ")</a><br/></li>"
+            End If
+        ElseIf oInspector.Controls.GetValue("company", 0) > 0 Then
+            Set oRecordCompany = New LDE.Record
+            oRecordCompany.Open Database.Classes("company"), oInspector.Controls.GetValue("company", 0), "phone"
+            
+            If VBA.Len(oRecordCompany.Value("phone")) > 0 Then
+                strHTML = strHTML + "<li><a> " + oRecordCompany.Value("phone") + " (" + Database.Classes("company").LocalName + ")</a><br/></li>"
+            End If
+        End If
+        strHTML = strHTML + "</ul>"
+    End If
+    
+    
+    GetContactOptions = strHTML
+    
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Todo.GetContactOptions")
+    GetContactOptions = ""
+End Function

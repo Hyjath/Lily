@@ -1,0 +1,46 @@
+Option Explicit
+
+'----------------------------------------NOTE!----------------------------------------------
+'
+' Description
+' Use this module if you want VBA to display messages
+'
+'-------------------------------------------------------------------------------------------
+    Public Const cErrorNoMessageBox As Long = 9998
+    Public Const cErrorShowMessageBox As Long = 9999
+
+' Display a formatted and language dependent error message and handle the mousepointer
+Public Sub ShowError(ByVal Source As String)
+    
+    Dim sErrMsg As String
+    Dim sDescription As String
+    Dim sNumber As String
+    
+    sDescription = Err.Description
+    sNumber = Err.Number
+    
+    Select Case Application.Locale
+        Case "sv":
+            sErrMsg = "%1%0%0Källa: %2%0Felkod: %3"
+        Case "fi":
+            sErrMsg = "%1%0%0Lähde: %2%0Virhekoodi: %3"
+        Case Else
+            sErrMsg = "%1%0%0Source: %2%0Error code: %3"
+    End Select
+    
+    Debug.Print Application.FormatString(sErrMsg, sDescription, Source, sNumber)
+    
+    
+    Call Application.Log.Add(lkLogTypeError, Source, , sNumber, Application.FormatString(sErrMsg, sDescription, Source, sNumber))
+    
+    Application.MousePointer = 0
+    
+    Select Case CLng(sNumber)
+        Case cErrorNoMessageBox:
+        Case cErrorShowMessageBox:
+            Call Application.MessageBox(sErrMsg, , sDescription, Source, sNumber)
+        Case Else:
+            Call Application.MessageBox(sErrMsg, vbOKOnly Or vbExclamation, sDescription, Source, sNumber)
+    End Select
+End Sub
+

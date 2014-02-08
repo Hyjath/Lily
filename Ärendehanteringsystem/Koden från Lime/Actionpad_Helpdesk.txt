@@ -1,0 +1,658 @@
+'OBSERVERA ATT KODEN I DENNA KLASS ÄR EN DEL AV GRUNDDATABASEN OCH FÅR INTE ÄNDRAS.
+'ÄNDRINGAR OCH TILLÄGG I FUNKTIONALITET GÖRS I SEPARATA KLASSER OCH MODULER.
+'OM DU TROTS DETTA VÄLJER ATT GÖRA ÄNDRINGAR I KODEN NEDAN GARANTERAS INTE LÄNGRE
+'VERSIONS KOMPABILITET ELLER SUPPORT. //Projektgruppen LEAN
+
+Option Explicit
+
+
+Public Sub Take()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    
+    
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+        'Reopen
+        If VBA.IsNull(oInspector.Controls.GetValue("enddate")) = False Then
+            If Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "q_done_reopen"), vbYesNo) = vbNo Then
+                Exit Sub
+            Else
+                Call ReOpen
+                oInspector.WebBar.Refresh
+                Call oInspector.Controls.SetValue("helpdeskstatus", 197101)
+            
+                Exit Sub
+            End If
+        End If
+        
+       
+        
+        'Take over
+        If oInspector.Controls.GetValue("coworker", 0) > 0 Then
+            If oInspector.Controls.GetValue("coworker", 0) = ActiveUser.Record.ID Then
+                Call Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "i_already_responsible"), VBA.vbInformation Or VBA.vbOKOnly)
+                Exit Sub
+            ElseIf Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "q_take_over"), VBA.vbQuestion + VBA.vbYesNo, oInspector.Controls.GetText("coworker")) = VBA.vbNo Then
+                Exit Sub
+            Else
+                Call TakeOver
+                Exit Sub
+            End If
+        End If
+        
+        
+        'Just take it
+        Call oInspector.Controls.SetValue("startdate", VBA.Now())
+        Call oInspector.Controls.SetValue("coworker", ActiveUser.Record.ID)
+        Call oInspector.Controls.SetValue("helpdeskstatus", "started")
+        Call oInspector.Save(True)
+        
+      
+        'create history
+       
+        Call CreateHelpdeskHistory(oInspector.Record.ID, Localize.GetText("ActionPad_Helpdesk", "t_errand_started"), True)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.Take")
+End Sub
+
+Public Sub ReOpen()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+                  
+        If VBA.IsNull(oInspector.Controls.GetValue("startdate")) Then
+            Call oInspector.Controls.SetValue("startdate", VBA.Now())
+            
+        End If
+        
+        Call oInspector.Controls.SetValue("enddate", Null)
+        Call oInspector.Controls.SetValue("coworker", ActiveUser.Record.ID)
+        Call oInspector.Save(True)
+    
+        'create history
+        Call CreateHelpdeskHistory(oInspector.Record.ID, Localize.GetText("ActionPad_Helpdesk", "t_errand_restarted"), True)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.ReOpen")
+End Sub
+
+Public Sub TakeOver()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+        If VBA.IsNull(oInspector.Controls.GetValue("startdate")) Then
+            Call oInspector.Controls.SetValue("startdate", VBA.Now())
+        End If
+        
+        Call oInspector.Controls.SetValue("coworker", ActiveUser.Record.ID)
+        Call oInspector.Save(True)
+        
+        'create history
+        Call CreateHelpdeskHistory(oInspector.Record.ID, Localize.GetText("ActionPad_Helpdesk", "t_errand_overtaken"))
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.TakeOver")
+End Sub
+
+Public Sub PutBack()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+              
+        Call oInspector.Controls.SetValue("startdate", Null)
+        Call oInspector.Controls.SetValue("coworker", Null)
+        Call oInspector.Save(True)
+        
+        'create history
+        Call CreateHelpdeskHistory(oInspector.Record.ID, Localize.GetText("ActionPad_Helpdesk", "t_errand_putback"), True)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.PutBack")
+End Sub
+
+Public Sub Done()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    If oInspector.Controls.GetValue("orderno") = "" Then
+        Lime.MessageBox (Localize.GetText("Actionpad_helpdesk", "i_orderno"))
+        Exit Sub
+    End If
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+        If VBA.IsNull(oInspector.Controls.GetValue("startdate", Null)) Then
+            Call oInspector.Controls.SetValue("startdate", VBA.Now())
+        End If
+        
+        Call oInspector.Controls.SetValue("enddate", VBA.Now())
+        Call oInspector.Controls.SetValue("helpdeskstatus", 197401)
+        
+        
+        'Set coworker to active coworker if coworker is not set.
+        If oInspector.Controls.GetValue("coworker", 0) = 0 Then
+            Call oInspector.Controls.SetValue("coworker", ActiveUser.Record.ID)
+        End If
+        
+        Call oInspector.Save(True)
+         
+        'create history
+        'Call CreateHelpdeskHistory(oInspector.Record.ID, Localize.GetText("ActionPad_Helpdesk", "t_errand_done"), True)
+       
+        'refresh webbar
+        oInspector.WebBar.Refresh
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.Done")
+End Sub
+
+Public Sub Park(ByVal nHours As Integer, ByVal sNotes As String, Optional bCloseRecord As Boolean = False)
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    'Get the local text
+    If VBA.Len(VBA.Trim(sNotes)) Then
+        sNotes = Localize.GetText("Actionpad_Helpdesk", sNotes)
+    End If
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+        
+        'Om ärendet inte är taget - Ta det
+        'If Lime.MessageBox(Localize.GetText("Actionpad_Helpdesk", "q_take"), VBA.vbYesNo) = VBA.vbYes Then
+            If oInspector.Controls.GetValue("coworker", 0) = 0 Then
+                Call ActionPad_Helpdesk.Take
+            End If
+        'End If
+        
+        'Dim pControls As Lime.Controls
+        Dim oRecord As LDE.Record
+        Dim dtPark As Date
+        Dim DTDeadline As Date
+        Dim bAllOK As Boolean 'might need user poll as parking is designed for working hours, and to avoid parking already done tasks.
+            
+        Application.MousePointer = 11
+             
+        'Set pControls = VerifyInspector().Controls
+        
+        ' Park
+        dtPark = AddWorkingHours(VBA.Now(), nHours)
+        
+        ' Deadline set by following rules by FGU:
+        ' Park = now + {1h, 2h, 4h, 8h,  2d,   1v} sets the corresponding deadlines to
+        ' Dead = now + {3h, 4h, 7h, 12h, 2d4h, 1v1d}
+        Select Case nHours
+            Case 0 To 1
+                DTDeadline = AddWorkingHours(VBA.Now(), 3)
+            Case 2 To 3
+                DTDeadline = AddWorkingHours(VBA.Now(), 4)
+            Case 4 To 7
+                DTDeadline = AddWorkingHours(VBA.Now(), 7)
+            Case 8 To 15
+                DTDeadline = AddWorkingHours(VBA.Now(), 12)
+            Case 16 To 39
+                DTDeadline = AddWorkingHours(VBA.Now(), 20)
+            Case Else
+                DTDeadline = AddWorkingHours(dtPark, 8)
+        End Select
+        
+    
+        ' Make sure that right now is a working hour
+        If IsWorktime(VBA.Now()) Then
+            bAllOK = True
+        ElseIf Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "q_errand_notworkingtime"), vbYesNo Or vbExclamation, VBA.CStr(dtPark)) = vbYes Then
+            bAllOK = True
+        Else
+            bAllOK = False
+        End If
+            
+        ' Make sure that we are not parking a done task
+        
+        If bAllOK And VBA.IsNull(oInspector.Controls.GetValue("enddate")) = False Then
+            If Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "q_reopen_closed"), vbYesNo Or vbExclamation) = vbYes Then
+                Call oInspector.Controls.SetValue("coworker", ActiveUser.Record.ID)
+                Call oInspector.Controls.SetValue("startdate", Now)
+                Call oInspector.Controls.SetValue("enddate", Null)
+                sNotes = Localize.GetText("ActionPad_Helpdesk", "t_errand_restarted") + " " + sNotes
+                Call Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "t_reopened_parked"), VBA.vbInformation)
+                bAllOK = True
+                oInspector.WebBar.Refresh
+            Else
+                bAllOK = False
+            End If
+        End If
+                 
+        If bAllOK Then ' Let's do it
+            Call oInspector.Controls.SetValue("parkeddate", dtPark)
+            Call oInspector.Controls.SetValue("deadlinedate", DTDeadline)
+            Call oInspector.Save(True)
+    
+            If VBA.Len(VBA.Trim(sNotes)) > 0 Then
+                Call CreateHelpdeskHistory(oInspector.Record.ID, VBA.Trim(sNotes))
+            End If
+        
+            If bCloseRecord Then
+                Call oInspector.Close(True)
+            End If
+        End If
+    End If
+    
+    Application.MousePointer = 0
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.Park")
+End Sub
+
+Private Function IsWorktime(theDate As Date) As Boolean
+    On Error GoTo ErrorHandler
+    
+    Dim theTime As Date
+    Dim bWorkTime As Boolean
+    
+    theTime = TimeSerial(VBA.Hour(theDate), VBA.Minute(theDate), 0)
+    bWorkTime = False
+        
+    If theTime >= CustomSettings.HELPDESK_WORKDAY_START And theTime < CustomSettings.HELPDESK_WORKDAY_END Then
+        If CustomSettings.HELPDESK_WORK_LUNCH Then
+            bWorkTime = True
+        ElseIf theTime >= CustomSettings.HELPDESK_LUNCH_START And theTime < CustomSettings.HELPDESK_LUNCH_END Then
+            bWorkTime = False
+        Else
+            bWorkTime = True
+        End If
+    End If
+
+    IsWorktime = bWorkTime
+    
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.IsWorktime")
+End Function
+
+' A great math helper method.
+Public Function AddWorkingHours(ByVal dtADate As Date, ByVal iHoursToAdd As Integer)
+    On Error GoTo ErrorHandler
+
+    Dim dtReturnDate As Date
+    Dim lMinutesToAdd As Long
+    dtReturnDate = dtADate
+        
+    ' add one hour at a time
+    Dim i As Integer
+    For i = 1 To iHoursToAdd
+        dtReturnDate = DateAdd("h", 1, dtReturnDate)
+        'Is during lunchhour and work during lunch hour
+        If CustomSettings.HELPDESK_WORK_LUNCH = False _
+                And VBA.TimeSerial(VBA.Hour(dtReturnDate), VBA.Minute(dtReturnDate), 0) > VBA.TimeSerial(VBA.Hour(CustomSettings.HELPDESK_LUNCH_START), VBA.Minute(CustomSettings.HELPDESK_LUNCH_START), 0) _
+                And VBA.TimeSerial(VBA.Hour(dtReturnDate), VBA.Minute(dtReturnDate), 0) < VBA.TimeSerial(VBA.Hour(CustomSettings.HELPDESK_LUNCH_END), VBA.Minute(CustomSettings.HELPDESK_LUNCH_END), 0) Then
+            lMinutesToAdd = VBA.DateDiff("n", CustomSettings.HELPDESK_LUNCH_START, CustomSettings.HELPDESK_LUNCH_END)
+            dtReturnDate = DateAdd("n", lMinutesToAdd, dtReturnDate)
+        
+        ElseIf VBA.TimeSerial(VBA.Hour(dtReturnDate), VBA.Minute(dtReturnDate), 0) > VBA.TimeSerial(VBA.Hour(CustomSettings.HELPDESK_WORKDAY_END), VBA.Minute(CustomSettings.HELPDESK_WORKDAY_END), 0) Then
+            lMinutesToAdd = 1440 - VBA.DateDiff("n", CustomSettings.HELPDESK_WORKDAY_START, CustomSettings.HELPDESK_WORKDAY_END) ' 1440 minuter per dygn
+            dtReturnDate = DateAdd("n", lMinutesToAdd, dtReturnDate)
+        End If
+        
+        If VBA.Weekday(dtReturnDate, vbMonday) > 5 And CustomSettings.HELPDESK_WORK_WEEKENDS = False Then ' if more than fri jump to mon
+            dtReturnDate = DateAdd("d", 8 - VBA.Weekday(dtReturnDate, vbMonday), dtReturnDate)
+        End If
+    Next i
+    
+    AddWorkingHours = dtReturnDate
+    
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.AddWorkingHours")
+End Function
+
+Private Sub CreateHelpdeskHistory(ByVal idowner As Long, Optional Text As String, Optional connectCompany As Boolean = False)
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+    
+        Dim NewHistory As LDE.Record
+        Set NewHistory = New LDE.Record
+        
+        NewHistory.Open Database.Classes("history")
+        NewHistory.Value("helpdesk") = idowner
+        NewHistory.Value("date") = VBA.Now()
+        NewHistory.Value("coworker") = ActiveUser.Record.ID
+        Call NewHistory.SelectOption("type", "comment")
+        NewHistory.Value("note") = Text
+        
+        If connectCompany Then
+            NewHistory.Value("company") = oInspector.Controls.GetValue("company")
+        End If
+        
+        NewHistory.Update
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.CreateHelpdeskHistory")
+End Sub
+Public Function GetContactInfo() As String
+    On Error GoTo ErrorHandler
+    Dim oRecordPerson As New LDE.Record
+    Dim oRecordCompany As LDE.Record
+    Dim oView As New LDE.view
+    Dim oInspector As Lime.Inspector
+    Dim strHTML As String
+    Dim idcompany As Long
+    
+    strHTML = ""
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("helpdesk", oInspector, False) Then
+        strHTML = "<ul>"
+    
+        'Om en person är kopplad
+        If oInspector.Controls.GetValue("person", 0) > 0 Then
+            Call oView.Add("phone")
+            Call oView.Add("mobilephone")
+            Call oView.Add("email")
+            Call oView.Add("company.idcompany")
+            Call oView.Add("company.phone")
+            
+            oRecordPerson.Open Database.Classes("person"), oInspector.Controls.GetValue("person"), oView
+            
+            
+            If VBA.Len(oRecordPerson.Value("phone")) > 0 Then
+                strHTML = strHTML + "<li> " + oRecordPerson.Value("phone") + " (" + oRecordPerson.Field("phone").LocalName + ")<br/></li>"
+            End If
+            
+            If VBA.Len(oRecordPerson.Value("mobilephone")) > 0 Then
+                strHTML = strHTML + "<li>" + oRecordPerson.Value("mobilephone") + " (" + oRecordPerson.Field("mobilephone").LocalName + ")<br/></li>"
+            End If
+            
+            If VBA.Len(oRecordPerson.Value("email")) > 0 Then
+                strHTML = strHTML & "<a href=""#"" title=""" + Localize.GetText("ActionPad_Helpdesk", "t_sendemail") + """ onclick=""javascript:VBA.Run('Actionpad_Helpdesk.EmailContact')"" >" & oRecordPerson.Text("email") & "</a>"
+            End If
+            
+            
+            'Vad är det för företagsid
+            If VBA.IsNull(oRecordPerson.Value("company.idcompany")) = False Then
+                idcompany = oRecordPerson.Value("company.idcompany")
+            End If
+        End If
+        
+        'Företag samma som personens företag och företag satt
+        If oInspector.Controls.GetValue("company", 0) = idcompany And oInspector.Controls.GetValue("company", 0) > 0 Then
+            If VBA.Len(oRecordPerson.Value("company.phone")) > 0 Then
+                strHTML = strHTML + "<li>" + oRecordPerson.Value("company.phone") + " (" + Database.Classes("company").LocalName + ")<br/></li>"
+            End If
+        ElseIf oInspector.Controls.GetValue("company", 0) > 0 Then
+            Set oRecordCompany = New LDE.Record
+            oRecordCompany.Open Database.Classes("company"), oInspector.Controls.GetValue("company", 0), "phone"
+            
+            If VBA.Len(oRecordCompany.Value("phone")) > 0 Then
+                strHTML = strHTML + "<li> " + oRecordCompany.Value("phone") + " (" + Database.Classes("company").LocalName + ")<br/></li>"
+            End If
+        End If
+        strHTML = strHTML + "</ul>"
+    End If
+    
+    
+    GetContactInfo = strHTML
+    
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.GetContactOptions")
+    GetContactInfo = ""
+End Function
+
+
+
+Public Function EmailContact()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("helpdesk", oInspector) Then
+    
+        Dim docTemplate As LDE.DocumentTemplate
+        
+        'Email templat, chosen on language
+        Select Case Application.Locale
+        Case "sv"
+            Set docTemplate = Database.Templates.Lookup("Ärende-Ta kontakt", lkLookupDocumentTemplateByName)
+        Case "en-us"
+            Set docTemplate = Database.Templates.Lookup("Helpdesk-Take contact", lkLookupDocumentTemplateByName)
+        Case "fi"
+            Set docTemplate = Database.Templates.Lookup("Tuki-Ota yhteyttä", lkLookupDocumentTemplateByName)
+        End Select
+        
+        
+        If docTemplate Is Nothing Then
+            Lime.MessageBox (Localize.GetText("Actionpad_Helpdesk", "i_notemplate"))
+            Exit Function
+        End If
+        
+        Dim oAddin As Object
+        Dim oMailer As Lime.IMailer
+        For Each oAddin In Application.AddIns
+            If oAddin.ProgId = "LimeOutlookXP.Addin" Then
+                Set oMailer = oAddin.Object
+            End If
+        Next oAddin
+        
+        If oMailer Is Nothing Then
+            Call Lime.MessageBox(Localize.GetText("Actionpad_Helpdesk", "i_nooutlook"))
+        Else
+            
+           oMailer.SendTemplate docTemplate, oInspector.Record, oInspector.Class.Fields("person"), Context:=ActiveInspector
+        End If
+    End If
+    
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Helpdesk.EmailContact")
+End Function
+
+Public Function SaveNew() As Boolean
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    
+    On Error GoTo ErrorSave
+        If (oInspector.Record.State And lkRecordStateNew) = lkRecordStateNew Then
+            Call oInspector.Save(True)
+        End If
+        GoTo SaveOK
+ErrorSave:
+        Lime.MessageBox (Err.Description)
+        SaveNew = False
+        Exit Function
+SaveOK:
+    SaveNew = True
+
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.TrySave")
+    
+    SaveNew = False
+End Function
+
+Public Sub NewHistory(ByVal strType As String)
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+    
+    If ActionPad_Helpdesk.SaveNew() Then
+        Set oInspector = ActionPadTools.NewInspectorFromInspector("history")
+        Call oInspector.Controls.SelectOption("type", strType)
+        Call oInspector.Controls.SetFocus("note")
+        oInspector.Modified = False
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.NewHistory")
+End Sub
+
+Public Sub getCustomerInfo()
+On Error GoTo ErrorHandler
+   
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    
+    If Globals.VerifyInspector("helpdesk", oInspector) And ActionPad_Helpdesk.SaveNew() Then
+        'Reopen
+        If VBA.IsNull(oInspector.Controls.GetValue("enddate")) = True Then
+            If Lime.MessageBox(Localize.GetText("ActionPad_Helpdesk", "q_getcustomerinfo"), vbYesNo) = vbNo Then
+                Exit Sub
+            Else
+                Call sendMailToCustomer
+                Call oInspector.Controls.SelectOption("helpdeskstatus", "moreinfocustomer")
+                Call oInspector.Save(True)
+                Call promptHistory("comment")
+            End If
+        End If
+        
+        'Sets the status in a waiting mode.
+       
+        'create history
+       ' Call CreateHelpdeskHistory(oInspector.Record.ID, Localize.GetText("ActionPad_Helpdesk", "t_errand_moreinfocustomer"), True)
+    
+    End If
+    
+    Exit Sub
+    
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.getCustomerInfo")
+End Sub
+
+Public Sub sendMailToCustomer()
+On Error GoTo ErrorHandler
+      
+    Dim pControls As Lime.Controls
+    Dim oNewMail As Object
+    Dim strRecipient As String
+    Dim strSubject As String
+    Dim strBody As String
+    Dim strSosNumber As String
+    Dim oMailer As Lime.IMailer
+    Dim m_Inspector As New Lime.Inspector
+    Dim oRecord As New Record
+    
+    Set pControls = Application.ActiveControls
+        If Not Application.ActiveInspector Is Nothing Then
+        Set m_Inspector = Application.ActiveInspector
+    Else
+        Exit Sub
+    End If
+    Dim oAddin As Object
+        For Each oAddin In Application.AddIns
+        If oAddin.ProgId = "LimeOutlookXP.Addin" Then
+            Set oMailer = oAddin.Object
+        End If
+    Next oAddin
+    
+    If oMailer Is Nothing Then
+        Call Lime.MessageBox("Lime kan inte kommunicera med Outlook. Kontrollera att kopplingen fungerar")
+        Exit Sub
+    End If
+    
+    If Application.ActiveExplorer Is Nothing Then
+        Call Lime.MessageBox("Markera de uppgifter du vill skicka påminnelser om!", vbExclamation + vbOKOnly)
+        Exit Sub
+    End If
+
+        
+    If pControls.Record.Modified = True Then
+        Call pControls.Save
+    End If
+   
+    strRecipient = pControls.Record.Record("person").Text("email")
+    strSubject = "Ärende " & pControls.GetValue("helpdeskno") & " har uppdaterats"
+    'strSubject = Localize.GetText("Actionpad_Helpdesk", "updatedsubject")
+    strBody = "Hej," & "<br><br>" & "Detta är ett automatiskt meddelande." & "<br><br>" & "Ärendenummer " & pControls.GetValue("helpdeskno") & " har uppdaterats." & "<br><br>" & pControls.GetValue("description") & "<br>"
+   ' strBody = Localize.GetText("Actionpad_Helpdesk", "updatedbody")
+    strBody = strBody & "<br>" & "Mvh " & pControls.GetText("coworker", "")
+
+
+    Set oNewMail = CreateObject("LimeOutlookXP.NewMail")
+    oNewMail.Recipients = strRecipient
+    oNewMail.Subject = strSubject
+    oNewMail.htmlbody = strBody
+    oNewMail.Display
+
+    
+ Exit Sub
+    
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.sendMailToCustomer")
+End Sub
+
+Public Function promptHistory(ByVal sHistoryType As String, Optional ByVal sNote As String)
+    On Error GoTo ErrorHandler
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    
+    
+        If Globals.VerifyInspector("helpdesk", oInspector) Then
+            If (oInspector.Record.State And lkRecordStateNew) = lkRecordStateNew Then
+            On Error GoTo ErrorSaving
+                'Call oInspector.Controls.Validate
+                oInspector.Save (True)
+            GoTo SaveOK
+ErrorSaving:
+                Call Lime.MessageBox(Err.Description)
+                Exit Function
+SaveOK:
+        End If
+    End If
+    
+    Dim oRecord As New LDE.Record
+    Dim oNewInspector As Lime.Inspector
+   
+    oRecord.Open Database.Classes("history")
+    Call oRecord.SelectOption("type", sHistoryType)
+    'If VBA.IsMissing(sNote) = False Then
+   '     oRecord.Value("note") = sNote
+  '  End If
+    oRecord.Value("helpdesk") = oInspector.Record.ID
+    oRecord.Value("company") = oInspector.Controls.GetValue("company")
+    oRecord.Value("person") = oInspector.Controls.GetValue("person")
+    oRecord.Value("eanno") = oInspector.Controls.GetValue("eanno")
+    Set oNewInspector = Lime.OpenInspector(oInspector, oRecord, lkActivateExisting)
+    
+    Exit Function
+ErrorHandler:
+    Call UI.ShowError("Actionpad_Helpdesk.PromptHistory")
+End Function

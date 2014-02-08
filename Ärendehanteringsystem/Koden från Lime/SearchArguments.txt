@@ -1,0 +1,6 @@
+Option Explicit
+
+Public FromDate As Date
+Public ToDate As Date
+Public strValue As String
+

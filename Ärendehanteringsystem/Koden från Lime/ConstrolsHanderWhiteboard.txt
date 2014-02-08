@@ -1,0 +1,81 @@
+Option Explicit
+    
+'This template includes controls event only. Controls events should always be used instead of inspector
+'events if both hold the same event. Control events are used when editing lists.
+
+    Private WithEvents m_Controls As Lime.Controls
+
+Private Sub Class_Initialize()
+    On Error GoTo ErrorHandler
+    Set m_Controls = Application.ActiveControls
+    
+    If Not m_Controls Is Nothing Then
+        Call Setup
+    End If
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerWhiteboard.Class_Initialize")
+End Sub
+
+Private Sub m_controls_AfterRecordChanged()
+    On Error GoTo ErrorHandler
+    Call Setup
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerWhiteboard.m_controls_AfterRecordChanged")
+End Sub
+
+Private Sub m_controls_BeforeCommand(ByVal Control As IControl, ByVal Command As ControlCommandEnum, ByVal Params As LDE.IProperties, Cancel As Boolean)
+    On Error GoTo ErrorHandler
+    
+    Dim sa() As String
+    Dim i As Integer
+    Dim pOption As LDE.Option
+   
+    Select Case Command
+        ' Detta kommando fyras av innan alternativlistan visas av Lime
+        Case lkControlCommandDropDown:
+            Select Case Control.Field.Name
+           
+                ' Lägg till ett par lösningsförslag
+                Case "card":
+                   
+                    ' Lägger till alla flikar som alternativ
+                    ReDim sa(Application.Database.Classes.Count)
+                   
+                    For i = 1 To Application.Database.Classes.Count
+                        sa(i - 1) = Application.Database.Classes.Item(i).LocalName
+                    Next
+
+                    Call Params.Put("Options", sa)
+            End Select
+    End Select
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerWhiteboard.m_Controls_BeforeCommand")
+End Sub
+
+Private Sub m_Controls_Refresh()
+    On Error GoTo ErrorHandler
+    Call Setup
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerWhiteboard.m_Controls_Refresh")
+End Sub
+
+Private Sub Setup()
+'Setup may only be called from Class_Initialize and the CONTROL events
+    On Error GoTo ErrorHandler
+    If Not m_Controls.Record Is Nothing Then
+        ' When new
+        If (m_Controls.State And lkControlsStateNew) = lkControlsStateNew Then
+            ' Add code here
+        End If
+    End If
+
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ControlsHandlerWhiteboard.Setup")
+End Sub
+

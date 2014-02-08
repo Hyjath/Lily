@@ -1,0 +1,71 @@
+Option Explicit
+
+
+Public Sub Postpone()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    If Globals.VerifyInspector("whiteboard", oInspector) Then
+        Call oInspector.Controls.SetValue("whiteboardstatus", 61001)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Witeboard.Postpone")
+End Sub
+
+Public Sub Deny()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    If Globals.VerifyInspector("whiteboard", oInspector) Then
+        Call oInspector.Controls.SetValue("donedate", VBA.Now())
+        Call oInspector.Controls.SetValue("whiteboardstatus", 61201)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Witeboard.Deny")
+End Sub
+
+
+Public Sub SetDone()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    Set oInspector = Application.ActiveInspector
+    If Globals.VerifyInspector("whiteboard", oInspector) Then
+        Call oInspector.Controls.SetValue("donedate", VBA.Now())
+        Call oInspector.Controls.SetValue("whiteboardstatus", 61101)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Witeboard.SetDone")
+End Sub
+
+Public Sub TakeOwnership()
+    On Error GoTo ErrorHandler
+    
+    Dim oInspector As Lime.Inspector
+    
+    If Not ActiveUser.Record Is Nothing Then
+        Set oInspector = Application.ActiveInspector
+        If Globals.VerifyInspector("whiteboard", oInspector) Then
+            Call oInspector.Controls.SetValue("coworker", ActiveUser.Record.ID)
+            Call oInspector.Controls.SetValue("whiteboardstatus", 60901)
+        End If
+    Else
+        Call Lime.MessageBox(Localize.GetText("ActionPad_Whiteboard", "e_coworkercard_required"), VBA.vbExclamation Or VBA.vbOKOnly)
+    End If
+    
+    Exit Sub
+ErrorHandler:
+    Call UI.ShowError("ActionPad_Witeboard.TakeOwnership")
+End Sub
+
